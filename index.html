@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Escáner QR + Google Sheets</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Arial', sans-serif;
+      background: linear-gradient(145deg, #f6f9fc, #e9f2f8);
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 1.5rem;
+    }
+
+    .card {
+      max-width: 700px;
+      width: 100%;
+      background: rgba(255,255,255,0.8);
+      backdrop-filter: blur(20px);
+      border-radius: 32px;
+      box-shadow: 0 20px 40px rgba(0,20,40,0.12);
+      padding: 2rem 1.8rem;
+      border: 1px solid rgba(255,255,255,0.5);
+    }
+
+    h1 {
+      font-size: 1.9rem;
+      font-weight: 600;
+      color: #0a2e4d;
+      margin-bottom: 0.5rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    h1 span {
+      background: #0a66c2;
+      color: white;
+      font-size: 1rem;
+      padding: 0.2rem 0.6rem;
+      border-radius: 40px;
+    }
+
+    .sub {
+      color: #3a5e7a;
+      margin-bottom: 2rem;
+      font-size: 0.98rem;
+      border-left: 3px solid #0a66c2;
+      padding-left: 0.8rem;
+    }
+
+    .scanner-section {
+      background: #0a1a2a;
+      border-radius: 24px;
+      overflow: hidden;
+      margin-bottom: 1.8rem;
+      aspect-ratio: 4/3;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      border: 2px solid rgba(255,255,255,0.1);
+    }
+
+    video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+
+    .btn {
+      background: white;
+      border: none;
+      padding: 0.9rem 2rem;
+      border-radius: 60px;
+      font-weight: 600;
+      font-size: 1rem;
+      color: #0a2e4d;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      cursor: pointer;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.04);
+      transition: all 0.2s ease;
+      border: 1px solid #e1ecf0;
+    }
+
+    .btn-primary {
+      background: #0a66c2;
+      color: white;
+      border: none;
+    }
+
+    .btn-primary:hover {
+      background: #084a8a;
+      transform: scale(0.98);
+    }
+
+    .info-panel {
+      background: white;
+      border-radius: 20px;
+      padding: 1.6rem;
+      margin-top: 1.5rem;
+      box-shadow: 0 6px 18px rgba(0,0,0,0.02);
+      border: 1px solid rgba(0,0,0,0.02);
+    }
+
+    .data-grid {
+      display: grid;
+      grid-template-columns: 1fr 2fr;
+      gap: 0.7rem 1rem;
+      font-size: 0.98rem;
+    }
+
+    .data-label {
+      color: #597a95;
+      font-weight: 500;
+    }
+
+    .data-value {
+      color: #0a2e4d;
+      font-weight: 500;
+      word-break: break-word;
+    }
+
+    .not-found {
+      background: #ffefed;
+      color: #b3402c;
+      padding: 1rem;
+      border-radius: 16px;
+      text-align: center;
+    }
+
+    .badge {
+      background: #e5f2fd;
+      color: #0a66c2;
+      padding: 0.2rem 0.8rem;
+      border-radius: 30px;
+      font-size: 0.8rem;
+      font-weight: 600;
+    }
+
+    @media (max-width: 500px) {
+      .card { padding: 1.5rem; }
+      .data-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+</head>
+<body>
+  <div class="card">
+    <h1>Parqueadero <span>Costa Azul Primera Etapa</span></h1>
+    <div class="sub">
+      Control de pagos Parqueadero.
+    </div>
+
+    <div class="scanner-section" id="scannerContainer">
+      <video id="video" playsinline></video>
+    </div>
+
+    <div style="display: flex; gap: 0.8rem; justify-content: center; flex-wrap: wrap;">
+      <button class="btn btn-primary" id="startBtn">▶ Iniciar escaneo</button>
+      <button class="btn" id="stopBtn">⏹ Detener cámara</button>
+    </div>
+
+    <div id="resultPanel" class="info-panel" style="display: none;">
+      <div class="info-title" style="display: flex; justify-content: space-between; align-items: center;">
+        <span>✅ Código escaneado</span>
+        <span class="badge" id="qrCodeDisplay"></span>
+      </div>
+      <div id="dataContent"></div>
+    </div>
+  </div>
+
+  <script>
+    // --- Configuración: apunta a tu backend ---
+    const BACKEND_URL = 'http://localhost:3000/buscar-qr';
+
+    const video = document.getElementById('video');
+    let scanning = false;
+    let stream = null;
+    let animationFrame = null;
+
+    const resultPanel = document.getElementById('resultPanel');
+    const qrCodeDisplay = document.getElementById('qrCodeDisplay');
+    const dataContent = document.getElementById('dataContent');
+
+    async function startCamera() {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ 
+          video: { facingMode: 'environment' } 
+        });
+        video.srcObject = stream;
+        video.setAttribute('playsinline', true);
+        await video.play();
+        scanning = true;
+        requestAnimationFrame(scanQR);
+      } catch (err) {
+        alert('No se pudo acceder a la cámara: ' + err.message);
+      }
+    }
+
+    function stopCamera() {
+      scanning = false;
+      if (animationFrame) cancelAnimationFrame(animationFrame);
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+        video.srcObject = null;
+      }
+    }
+
+    function scanQR() {
+      if (!scanning) return;
+      if (video.readyState === video.HAVE_ENOUGH_DATA) {
+        const canvas = document.createElement('canvas');
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const code = jsQR(imageData.data, canvas.width, canvas.height, {
+          inversionAttempts: 'dontInvert'
+        });
+        if (code) {
+          stopCamera();
+          qrCodeDisplay.innerText = code.data;
+          consultarBackend(code.data);
+          return;
+        }
+      }
+      animationFrame = requestAnimationFrame(scanQR);
+    }
+
+    async function consultarBackend(codigo) {
+      dataContent.innerHTML = '<div style="text-align:center; padding:1rem;">🔍 Consultando Google Sheets...</div>';
+      resultPanel.style.display = 'block';
+
+      try {
+        const response = await fetch(BACKEND_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ codigo })
+        });
+        const result = await response.json();
+
+        if (!response.ok) {
+          mostrarError(result.error || 'Error en la consulta');
+          return;
+        }
+
+        if (result.success) {
+          mostrarResultado(result.data);
+        } else {
+          mostrarNoEncontrado(codigo);
+        }
+      } catch (error) {
+        console.error(error);
+        mostrarError('No se pudo conectar con el backend. ¿Está corriendo?');
+      }
+    }
+
+    function mostrarResultado(registro) {
+      const columnasMostrar = [
+        'CODIGO', 'NOMBRE', 'PLACA', 'NUMERO DE CONTACTO', 'ULTIMO PAGO', 'QR', 'RECIBO'
+      ];
+
+      let html = '<div class="data-grid">';
+      columnasMostrar.forEach(col => {
+        const key = Object.keys(registro).find(k => 
+          k.trim().toUpperCase() === col.trim().toUpperCase()
+        );
+        const valor = key ? registro[key] : '—';
+        html += `<span class="data-label">${col}</span>`;
+        html += `<span class="data-value">${valor}</span>`;
+      });
+      html += '</div>';
+      dataContent.innerHTML = html;
+    }
+
+    function mostrarNoEncontrado(codigo) {
+      dataContent.innerHTML = `  
+        <div class="not-found">
+          ❌ No se encontró el código <strong>${codigo}</strong> en Google Sheets
+        </div>
+      `;
+    }
+
+    function mostrarError(mensaje) {
+      dataContent.innerHTML = `  
+        <div class="not-found" style="background:#fdede0; color:#a94442;">
+          ⚠️ ${mensaje}
+        </div>
+      `;
+    }
+
+    document.getElementById('startBtn').addEventListener('click', () => {
+      stopCamera();
+      startCamera();
+    });
+
+    document.getElementById('stopBtn').addEventListener('click', () => {
+      stopCamera();
+      resultPanel.style.display = 'none';
+    });
+
+    window.addEventListener('beforeunload', stopCamera);
+  </script>
+</body>
+</html>
