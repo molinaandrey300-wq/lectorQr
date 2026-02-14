@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Escáner QR + Google Sheets</title>
   <style>
+    /* Estilos CSS */
     * {
       margin: 0;
       padding: 0;
@@ -182,8 +183,8 @@
   </div>
 
   <script>
-    // --- Configuración: apunta a tu backend ---
-    const BACKEND_URL = 'http://localhost:3000/buscar-qr';
+    // --- Configuración de la URL del Backend ---
+    const BACKEND_URL = `${window.location.origin}/api/buscar-qr`; // Cambiado a la URL de producción
 
     const video = document.getElementById('video');
     let scanning = false;
