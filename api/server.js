@@ -11,20 +11,20 @@ app.use(express.json());
 
 // --- CONFIGURACIÓN ---
 // ID de la hoja de Google Sheets
-const SPREADSHEET_ID = '1u8go_4XYqn_b0NmAGMiqmlJ07MoOtsINs5nlWeLPUnQ';
+const SPREADSHEET_ID = '1u8go_4XYqn_b0NmAGMiqmlJ07MoOtsINs5nlWeLPUnQ'; // Cambia por el ID de tu hoja
 // Nombre de la hoja dentro de la hoja de cálculo
 const SHEET_NAME = 'ACCESODEUSUARIOS'; // Cambia esto si es diferente
 
-// Autenticación con la cuenta de servicio
+// Autenticación con la cuenta de servicio de Google
 async function getAuthClient() {
   const auth = new google.auth.GoogleAuth({
-    keyFile: 'credentials.json', // Asegúrate de que este archivo esté presente en tu entorno local y no subido a GitHub
+    keyFile: 'credentials.json', // Este archivo no debe subirse a GitHub
     scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly'],
   });
   return await auth.getClient();
 }
 
-// Ruta para consultar el código QR
+// Ruta POST para consultar el código QR
 app.post('/api/buscar-qr', async (req, res) => {
   const { codigo } = req.body;
   if (!codigo) {
@@ -32,7 +32,7 @@ app.post('/api/buscar-qr', async (req, res) => {
   }
 
   try {
-    // Autenticación con Google API
+    // Autenticación con la API de Google
     const auth = await getAuthClient();
     const sheets = google.sheets({ version: 'v4', auth });
 
